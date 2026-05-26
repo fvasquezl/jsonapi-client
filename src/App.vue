@@ -58,9 +58,19 @@ import axios from 'axios'
 import {CaseType, deserialize, serialize} from "jsonapi-fractal";
 import slugify from "slugify";
 
-axios.defaults.withCredentials = true
-axios.defaults.withXSRFToken = true
 axios.defaults.baseURL = 'http://localhost'
+
+const TOKEN_KEY = 'api_token'
+
+function setToken(token: string): void {
+    localStorage.setItem(TOKEN_KEY, token)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+}
+
+function clearToken(): void {
+    localStorage.removeItem(TOKEN_KEY)
+    delete axios.defaults.headers.common['Authorization']
+}
 
 interface AuthUser {
     id: string;
@@ -136,18 +146,22 @@ async function fetchCategories() {
 }
 
 async function login() {
-    await axios.get('/sanctum/csrf-cookie')
     try {
-        await axios.post('/login', {email: email.value, password: password.value})
-        await fetchUser()
+        const res = await axios.post('/api/v1/login', {email: email.value, password: password.value})
+        setToken(res.data.token)
+        user.value = res.data.user
     } catch (error: any) {
         console.log(error.response?.data)
     }
 }
 
 async function logout() {
-    await axios.post('/logout')
-    user.value = null
+    try {
+        await axios.post('/api/v1/logout')
+    } finally {
+        clearToken()
+        user.value = null
+    }
 }
 
 async function createArticle() {
@@ -166,7 +180,11 @@ async function createArticle() {
 }
 
 onMounted(async () => {
-    await fetchUser()
+    const saved = localStorage.getItem(TOKEN_KEY)
+    if (saved) {
+        setToken(saved)
+        await fetchUser()
+    }
     await fetchCategories()
     const {data} = await axios.get('/api/v1/articles?sort=-created-at&include=authors,categories')
     articles.value = deserialize(data, {changeCase: CaseType.camelCase}) as Article[]
