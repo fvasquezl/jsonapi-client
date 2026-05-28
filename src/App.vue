@@ -186,7 +186,7 @@ onMounted(async () => {
         await fetchUser()
     }
     await fetchCategories()
-    const {data} = await axios.get('/api/v1/articles?sort=-created-at&include=authors,categories')
+    const {data} = await axios.get('/api/v1/articles?sort=-createdAt&include=authors,categories')
     articles.value = deserialize(data, {changeCase: CaseType.camelCase}) as Article[]
 })
 </script>
