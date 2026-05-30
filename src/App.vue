@@ -118,13 +118,16 @@ const isAuthenticated = computed(() => user.value !== null)
 
 const newArticleTitle = computed({
     get() {
-        newArticle.value.slug = slugify(newArticle.value.title, {
-            lower: true, replacement: '-', strict: true,
-        })
         return newArticle.value.title
     },
     set(value: string) {
         newArticle.value.title = value
+        // Al crear, el slug sigue al título; al editar se deja independiente.
+        if (!editingId.value) {
+            newArticle.value.slug = slugify(value, {
+                lower: true, replacement: '-', strict: true,
+            })
+        }
     },
 })
 
