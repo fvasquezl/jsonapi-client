@@ -12,13 +12,16 @@ There is no test or lint script configured. Type errors are surfaced through `vu
 
 ## Architecture
 
-Vue 3 + TypeScript SPA scaffolded with Vite. Entry chain: `index.html` → `src/main.ts` (creates the app and mounts `#app`) → `src/App.vue`.
+Vue 3 + TypeScript SPA scaffolded with Vite. Entry chain: `index.html` → `src/main.ts` (creates the app, registers the router, mounts `#app`) → `src/App.vue` (just `<router-view/>`).
 
-The app consumes the **lvPassport JSON:API backend at `http://localhost/api/v2`** (`axios.defaults.baseURL` in `App.vue`). It is a single-view app — no vue-router, no Pinia/Vuex. All state lives as refs/computed in `App.vue`, with axios calls in event handlers. Responses are flattened with `jsonapi-fractal`'s `deserialize`; outgoing create/update payloads are built with `serialize`.
+The app consumes the **lvPassport JSON:API backend at `http://localhost/api/v2`** (`axios.defaults.baseURL`, set in `src/composables/useAuth.ts`). Routing uses **vue-router 4** with two pages: `/login` (`src/views/LoginView.vue`) and `/articles` (`src/views/ArticlesView.vue`); `/` redirects to `/articles`. A `beforeEach` guard (`src/router/index.ts`) gates `/articles` behind `meta.requiresAuth` — no token redirects to `/login`, and an authenticated visit to `/login` redirects to `/articles`. There is **no Pinia/Vuex**: shared auth state (`token`, `user`) lives as module-level refs in the `useAuth` composable (a singleton across views, guard, and reloads); per-page state lives as refs in each view. Responses are flattened with `jsonapi-fractal`'s `deserialize`; outgoing create/update payloads are built with `serialize`. Shared interfaces live in `src/types.ts`.
+
+`useAuth` owns auth: `login`/`logout`, `isAuthenticated`, and `ensureUser` (lazily fetches `/user` from a stored token on reload, clearing the token if it's invalid). The token is stored in `localStorage` and sent as a Bearer header.
 
 It handles a full article CRUD plus article comments plus auth:
 - `POST /login` (sends explicit scopes: `read`, `articles:store`, `articles:update`, `articles:delete`, `comments:store`), token stored in `localStorage` and sent as a Bearer header; `POST /logout` clears it.
-- `GET /user`, `GET /categories`, `GET /articles?sort=-createdAt&include=authors,categories,comments,comments.author`.
+- `GET /user`, `GET /categories`.
+- `GET /articles` is **paginated** (`page[number]`/`page[size]`, `PAGE_SIZE = 5`) with `sort=-createdAt&include=authors,categories,comments,comments.author`; the response's `meta.page` (`currentPage`/`lastPage`/`total`/…) drives the prev/next pager. Deleting the last row on a page steps back a page; creating jumps to page 1.
 - `POST` / `PATCH` / `DELETE /articles` for create/edit/delete.
 - `POST /comments?include=author` to add a comment to an article.
 
