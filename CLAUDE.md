@@ -35,7 +35,8 @@ TypeScript uses project references: `tsconfig.app.json` covers `src/**` and exte
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan at
+`specs/001-login-gated-articles/plan.md`.
 <!-- SPECKIT END -->
 
 <!-- rtk-instructions v2 -->
