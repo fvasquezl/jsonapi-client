@@ -155,12 +155,10 @@ const newArticleTitle = computed({
     },
     set(value: string) {
         newArticle.value.title = value
-        // Al crear, el slug sigue al título; al editar se deja independiente.
-        if (!editingId.value) {
-            newArticle.value.slug = slugify(value, {
-                lower: true, replacement: '-', strict: true,
-            })
-        }
+        // El slug siempre sigue al título (crear y editar).
+        newArticle.value.slug = slugify(value, {
+            lower: true, replacement: '-', strict: true,
+        })
     },
 })
 
@@ -287,14 +285,16 @@ async function addComment(article: Article) {
     if (!body || !user.value?.id) return
     try {
         // El API exige ownership: el author declarado debe ser el usuario autenticado.
+        // El nombre del relationship es singular (author/article) pero el tipo de
+        // recurso es plural; el mapa fija ese tipo (con array, fractal usaría el nombre).
         const payload = serialize(
             {
                 body,
-                author: {id: user.value.id, type: 'authors'},
-                article: {id: article.id, type: 'articles'},
+                author: {id: user.value.id},
+                article: {id: article.id},
             },
             'comments',
-            {relationships: ['author', 'article']},
+            {relationships: {author: 'authors', article: 'articles'}},
         )
         const response = await axios.post('/comments?include=author', payload, {headers: jsonApiHeaders})
         const comment = deserialize(response.data, {changeCase: CaseType.camelCase}) as Comment
