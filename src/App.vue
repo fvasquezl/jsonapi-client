@@ -51,6 +51,24 @@
                 <button @click="editArticle(article)">Editar</button>
                 <button @click="deleteArticle(article)">Borrar</button>
             </template>
+
+            <h4>Comentarios</h4>
+            <ul>
+                <li v-for="comment in article.comments" :key="comment.id">
+                    <strong>{{ comment.author?.name ?? 'Anonimo' }}:</strong>
+                    {{ comment.body }}
+                </li>
+                <li v-if="!article.comments?.length">Sin comentarios.</li>
+            </ul>
+
+            <form v-if="isAuthenticated" @submit.prevent="addComment(article)">
+                <textarea
+                    v-model="commentDrafts[article.id]"
+                    placeholder="Escribe un comentario.."
+                ></textarea>
+                <br>
+                <input type="submit" value="Comentar">
+            </form>
         </li>
     </ul>
 
@@ -68,7 +86,11 @@ axios.defaults.baseURL = 'http://localhost/api/v2'
 const TOKEN_KEY = 'api_token'
 
 // V2 emite tokens solo-lectura por defecto; pedimos los scopes que necesita el cliente.
-const API_SCOPES = ['read', 'articles:store', 'articles:update', 'articles:delete']
+const API_SCOPES = [
+    'read',
+    'articles:store', 'articles:update', 'articles:delete',
+    'comments:store',
+]
 
 function setToken(token: string): void {
     localStorage.setItem(TOKEN_KEY, token)
@@ -85,6 +107,13 @@ interface AuthUser {
     name: string;
 }
 
+interface Comment {
+    id: string;
+    body: string;
+    createdAt?: string;
+    author?: { id: string; name?: string } | null;
+}
+
 interface Article {
     id: string;
     title: string;
@@ -92,6 +121,7 @@ interface Article {
     content: string;
     categories?: { id: string; name?: string } | null;
     authors?: { id: string; name?: string } | null;
+    comments?: Comment[];
 }
 
 interface Category {
@@ -113,6 +143,9 @@ const emptyArticle = () => ({
 
 const newArticle = ref(emptyArticle())
 const editingId = ref<string | null>(null)
+
+// Borrador de comentario por artículo (clave = id del artículo).
+const commentDrafts = ref<Record<string, string>>({})
 
 const isAuthenticated = computed(() => user.value !== null)
 
@@ -205,7 +238,11 @@ async function saveArticle() {
             )
             const updated = deserialize(response.data, {changeCase: CaseType.camelCase}) as Article
             const index = articles.value.findIndex(a => a.id === originalId)
-            if (index !== -1) articles.value[index] = updated
+            if (index !== -1) {
+                // El PATCH no trae comments; conservamos los ya cargados.
+                updated.comments = articles.value[index].comments ?? []
+                articles.value[index] = updated
+            }
         } else {
             const response = await axios.post('/articles?include=authors,categories', newArticleRequest.value, {
                 headers: jsonApiHeaders,
@@ -245,6 +282,30 @@ async function deleteArticle(article: Article) {
     }
 }
 
+async function addComment(article: Article) {
+    const body = (commentDrafts.value[article.id] ?? '').trim()
+    if (!body || !user.value?.id) return
+    try {
+        // El API exige ownership: el author declarado debe ser el usuario autenticado.
+        const payload = serialize(
+            {
+                body,
+                author: {id: user.value.id, type: 'authors'},
+                article: {id: article.id, type: 'articles'},
+            },
+            'comments',
+            {relationships: ['author', 'article']},
+        )
+        const response = await axios.post('/comments?include=author', payload, {headers: jsonApiHeaders})
+        const comment = deserialize(response.data, {changeCase: CaseType.camelCase}) as Comment
+        if (!article.comments) article.comments = []
+        article.comments.push(comment)
+        commentDrafts.value[article.id] = ''
+    } catch (error: any) {
+        console.log(error.response?.data?.errors ?? error.response?.data)
+    }
+}
+
 onMounted(async () => {
     const saved = localStorage.getItem(TOKEN_KEY)
     if (saved) {
@@ -252,7 +313,7 @@ onMounted(async () => {
         await fetchUser()
     }
     await fetchCategories()
-    const {data} = await axios.get('/articles?sort=-createdAt&include=authors,categories')
+    const {data} = await axios.get('/articles?sort=-createdAt&include=authors,categories,comments,comments.author')
     articles.value = deserialize(data, {changeCase: CaseType.camelCase}) as Article[]
 })
 </script>
