@@ -313,7 +313,11 @@ onMounted(async () => {
         await fetchUser()
     }
     await fetchCategories()
-    const {data} = await axios.get('/articles?sort=-createdAt&include=authors,categories,comments,comments.author')
-    articles.value = deserialize(data, {changeCase: CaseType.camelCase}) as Article[]
+    try {
+        const {data} = await axios.get('/articles?sort=-createdAt&include=authors,categories,comments,comments.author')
+        articles.value = deserialize(data, {changeCase: CaseType.camelCase}) as Article[]
+    } catch (error: any) {
+        console.error('no se pudo cargar el listado de articulos', error.response?.data ?? error)
+    }
 })
 </script>
